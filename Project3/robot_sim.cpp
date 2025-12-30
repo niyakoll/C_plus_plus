@@ -6,6 +6,10 @@
 //Base Class Robot
 enum class Direction {Up,Down,Left,Right};
 const int GRID_SIZE = 10;
+std::vector<std::pair<int,int>> obstacles = {
+    {3, 3}, {4, 3}, {5, 3},  // a wall
+    {7, 6}, {2, 8}
+};
 class Robot{
     protected:
     //protected: derived classes (Wheeled, Legged, Flying) can access these directly.
@@ -16,17 +20,31 @@ class Robot{
         int battery = 100;
         std::string type;
         std::vector<std::pair<int,int>> path;
-        
+        bool isObstacle(int posX, int posY)const{
+            for(const auto& obs : obstacles){
+                if(obs.first == posX && obs.second == posY)return true;
+            }
+            return false;
+        }
     public:
         
-        Robot(std::string t) : type(t){} //construtor, init list() type = t
+        Robot(std::string t) : type(t){
+            path.emplace_back(positionX, positionY);
+        } //construtor, init list() type = t
         //Constructor using member initializer list
         //Initializes type ("Wheeled", "Legged", etc.)
+        
 
         virtual void move(Direction dir) = 0; //pure virtual = absract class
         //forces every derived robot to implement its own movement.
         // "= 0 " is a promise, bthe robot can move but no default movement, must overiden when derived(pure virtual function), make robot become abstract class
         //can not create a plain Robot object
+
+        virtual void update(){
+            
+        }
+
+
         virtual void showPath()const{
             std::cout << "Path History: \n";
             for(auto& [x,y] : path){
@@ -83,6 +101,10 @@ class WheeledRobot : public Robot {
                 std::cout << "Cannot move — boundary!\n";
                 return;
             }
+            else if(isObstacle(newX,newY)){
+                std::cout << "Blocked by obstacle!\n";
+                return;
+            }
             else{
                 positionX = newX;
                 positionY = newY;
@@ -91,6 +113,9 @@ class WheeledRobot : public Robot {
                 path.emplace_back(positionX, positionY);
             }
             
+        }
+        void update() override {
+            move(Direction::Right);
         }
 };
 class LeggedRobot : public Robot{
@@ -119,6 +144,10 @@ class LeggedRobot : public Robot{
                 std::cout << "Cannot move — boundary!\n";
                 return;
             }
+            else if(isObstacle(newX,newY)){
+                std::cout << "Blocked by obstacle!\n";
+                return;
+            }
             else{
                 positionX = newX;
                 positionY = newY;
@@ -127,6 +156,23 @@ class LeggedRobot : public Robot{
                 path.emplace_back(positionX, positionY);
             }
             
+        }
+        void update() override {
+            int testX = positionX+1;// try move to right
+            int testY = positionY;
+            if(isObstacle(testX,testY)||testX >= GRID_SIZE-1){
+                testX = positionX;
+                testY = positionY + 1; //try move to up
+                if (isObstacle(testX, testY) || testY >= GRID_SIZE-1) {
+                    // Try left as last resort
+                    move(Direction::Left); 
+                    return;
+                }
+                move(Direction::Up);
+            }
+            else{
+                move(Direction::Right);
+            }
         }
 };
 
@@ -156,6 +202,10 @@ class FlyingRobot : public Robot{
                 std::cout << "Cannot move — boundary!\n";
                 return;
             }
+            else if(isObstacle(newX,newY)){
+                std::cout << "Blocked by obstacle!\n";
+                return;
+            }
             else{
                 positionX = newX;
                 positionY = newY;
@@ -165,6 +215,10 @@ class FlyingRobot : public Robot{
             }
             
         }
+        void update() override {
+            // Flying robots love altitude!
+            move(Direction::Up);  // big jump of 3
+        }
 };
 
 void displayGrid(const std::vector<std::unique_ptr<Robot>>& robots){
@@ -172,6 +226,19 @@ void displayGrid(const std::vector<std::unique_ptr<Robot>>& robots){
     for(int row = GRID_SIZE-1; row >= 0; --row){
         for(int col = 0; col < GRID_SIZE; ++col){
             char symbol = '.';
+            bool isObstacle = false;
+            for(const auto& obs : obstacles){
+                if(obs.first == col && obs.second == row){
+                    symbol = '#'; // obstacle symbol
+                    isObstacle = true;
+                    break;
+                }
+            }
+            if (isObstacle)
+            {
+                std::cout << symbol << ' ';
+                continue;
+            }
             for(const auto& robot : robots){
                 if(robot->getX() == col && robot -> getY() == row){
                     symbol = robot->getType()[0]; // 'W' or 'L'
@@ -211,6 +278,55 @@ void moveOption(std::vector<std::unique_ptr<Robot>>& robots){
             robots[robotChoice-1]->move(dir);
             robots[robotChoice-1]->showPath();
         };
+void moveTogather(std::vector<std::unique_ptr<Robot>>& robots){
+            std::cout << "How many simulation steps? (between 1-4) ";
+            int steps; 
+            if(!(std::cin >> steps)|| steps <= 0 || steps > 4){
+                std::cout << "Invalid number of steps!(must be 1-4)\n";
+                return;
+            }
+            std::cout << "Choose direction for all robots:\n1. Up  2. Down  3. Left  4. Right\n";
+            int dirChoice; 
+            std::cin >> dirChoice;
+            if (dirChoice < 1 || dirChoice > 4) {
+                std::cout << "Invalid direction!\n";
+                return;
+            }
+            Direction dir;
+            switch (dirChoice) {
+                case 1: dir = Direction::Up; break;
+                case 2: dir = Direction::Down; break;
+                case 3: dir = Direction::Left; break;
+                case 4: dir = Direction::Right; break;
+            }
+            std::cout << "\nStarting autonomous simulation for " << steps << " steps...\n\n";
+            for(auto& rb : robots){
+                for(int s = 0 ; s < steps ; ++s){
+                    std::cout << "--- Simulation Step " << (s + 1) << " ---\n";
+                    rb->move(dir);
+                }
+                displayGrid(robots);
+            }
+            std::cout << "Autonomous simulation complete!\n";
+        };
+void autonomousMovement(std::vector<std::unique_ptr<Robot>>& robots){
+            std::cout << "How many simulation steps? (between 1-9) ";
+            int steps; 
+            if(!(std::cin >> steps)|| steps <= 0 || steps > 9){
+                std::cout << "Invalid number of steps!(must be 1-9)\n";
+                return;
+            }
+            
+            std::cout << "\nStarting autonomous simulation for " << steps << " steps...\n\n";
+            for(int s = 0 ; s < steps ; ++s){
+                std::cout << "--- Simulation Step " << (s + 1) << " ---\n";
+                for(auto& rb : robots){
+                    rb->update();
+                }
+                displayGrid(robots);
+            }
+            std::cout << "Autonomous simulation complete!\n";
+        };
 int main() {
     std::vector<std::unique_ptr<Robot>> robots;
     robots.push_back(std::make_unique<WheeledRobot>());
@@ -223,11 +339,14 @@ int main() {
         std::cout << "\n=== Robot Simulator Menu ===\n";
         std::cout << "1. Move robot\n";
         std::cout << "2. Show all status\n";
-        std::cout << "3. Quit\n";
+        std::cout << "3. Autonomous Movement (each robot uses own AI)\n";
+        std::cout << "4. Quit\n";
         std::cin >> choice;
         switch(choice){
             case 1 : moveOption(robots);break;
             case 2 : for (const auto& r : robots) r->showStatus();break;
+            case 3 : autonomousMovement(robots);break;
+            case 4 : std::cout << "Goodbye!\n"; break;
         }
         //std::cout << "Choice: ";
         
@@ -254,7 +373,7 @@ int main() {
                 break;
         }
                 */
-    } while (choice != 3);
+    } while (choice != 4);
 
     return 0;
 }
